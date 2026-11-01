@@ -1,7 +1,7 @@
 {
   "name": "hypercopy",
-  "version": "0.2.1",
-  "description": "⚡ The world's fastest bare-metal hardware-saturating copy & paste CLI engine written in Rust",
+  "version": "0.2.2",
+  "description": "The world's fastest bare-metal hardware-saturating copy & paste CLI engine written in Rust",
   "main": "bin/index.js",
   "bin": {
     "hcp": "bin/index.js",

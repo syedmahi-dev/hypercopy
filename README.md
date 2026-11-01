@@ -5,7 +5,7 @@
 **The world's fastest bare-metal hardware-saturating copy & paste CLI engine written in Rust.**
 
 [![Rust Version](https://img.shields.io/badge/rust-1.85%2B-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
-[![NPM Version](https://img.shields.io/badge/npm-v0.2.1-red.svg?style=flat-square&logo=npm)](https://www.npmjs.com/package/hypercopy)
+[![NPM Version](https://img.shields.io/badge/npm-v0.2.2-red.svg?style=flat-square&logo=npm)](https://www.npmjs.com/package/hypercopy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg?style=flat-square)](#)
 [![Throughput](https://img.shields.io/badge/throughput-3.8%20GB%2Fs%20sustained-brightgreen.svg?style=flat-square)](#)
@@ -77,6 +77,20 @@ Measured on bare-metal PCIe NVMe SSD storage against the world's leading file tr
 | **Microsoft `xcopy /J`** | 818.0 ms | 3,755.5 MB/s | 1.01x slower |
 | **HyperCopy (`hcp`) (Auto Engine)** | **812.0 ms** | **3,783.3 MB/s** | **Fastest (3.78 GB/s)** |
 
+### 6. Multi-File Sustained Dataset: 10 Files (1.0 GB each = 10.0 GB total)
+| Tool | Time (s) | Line-Rate | vs HyperCopy |
+| :--- | :---: | :---: | :---: |
+| **FastCopy v5.12.0** | 22.51 s | 454.8 MB/s | **5.92x slower** |
+| **Microsoft `robocopy /MT:32` (buffered)** | 15.11 s | 677.6 MB/s | **3.98x slower** |
+| **Microsoft `robocopy /MT:32 /J` (unbuffered)** | 3.16 s | 3,239.5 MB/s | Fast unbuffered baseline |
+| **HyperCopy (`hcp`) (Auto Engine)** | **3.80 s** | **2,693.1 MB/s** | **5.9x faster than FastCopy** |
+
+### 7. 100 Gigabyte Sustained Transfer Endurance Test
+- **Total Data Transferred**: 100.00 GB (107,374,182,400 bytes) across 5 passes of 20 GB.
+- **Peak Burst Speed**: **2,693.1 MB/s** (2.69 GB/s) during hardware pseudo-SLC cache phase.
+- **Sustained TLC Average**: **144.2 MB/s** sustained through full raw TLC NAND folding and garbage collection.
+- **Memory Footprint**: Rock-solid under **18 MB RAM** across the entire 100 GB duration with zero memory leaks.
+
 See the complete methodology and hardware specifications in [BENCHMARKS.md](BENCHMARKS.md).
 
 ---
@@ -104,6 +118,7 @@ hcp disable-default
 
 ## Key Features
 
+- **Parallel Segmented Multi-Stream Engine**: Slices a single large file into $N$ parallel direct-DMA streams (like IDM / aria2) to saturate multi-channel NVMe queue depths (`-e parallel`, `-s <streams>`).
 - **Direct DMA Streaming**: Bypasses Windows Page Cache using `FILE_FLAG_NO_BUFFERING` with double-buffered overlapped I/O.
 - **Instant CoW Reflink**: Duplicates extents in <1ms without touching physical storage blocks on ReFS/Btrfs volumes.
 - **Kernel Storage Optimization**: Utilizes `COPY_FILE_ENABLE_LOCAL_STORAGE_OPTIMIZATION` in `CopyFile2` for optimized kernel-side I/O paths.
@@ -136,7 +151,7 @@ cargo install --git https://github.com/syedmahi-dev/hypercopy.git
 ```
 
 ### Method 3: Download Standalone Release Zip
-Download pre-built standalone binaries from the [Releases](https://github.com/syedmahi-dev/hypercopy/releases) page (`hypercopy-v0.2.1-windows-x86_64.zip`).
+Download pre-built standalone binaries from the [Releases](https://github.com/syedmahi-dev/hypercopy/releases) page (`hypercopy-v0.2.2-windows-x86_64.zip`).
 
 ---
 
@@ -153,16 +168,19 @@ hcp copy file1.iso file2.zip "D:\Target\"
 
 ### 2. Maximum Hardware Squeezing
 ```powershell
-# 1. Force Unbuffered Direct DMA (Bypass OS Cache for huge files)
+# 1. Parallel Multi-Stream Segmented Copy (like IDM / aria2 for huge files)
+hcp copy "C:\HugeFile.iso" "D:\Dest\" --engine parallel --streams 8
+
+# 2. Force Unbuffered Direct DMA (Bypass OS Cache for huge files)
 hcp copy "C:\HugeFile.iso" "D:\Dest\" --engine direct
 
-# 2. SIMD Cryptographic Verification (BLAKE3 >25 GB/s)
+# 3. SIMD Cryptographic Verification (BLAKE3 >25 GB/s)
 hcp copy "D:\Source" "E:\Dest" --verify
 
-# 3. High-Concurrency Worker Threads (e.g. 32 threads for massive directories)
+# 4. High-Concurrency Worker Threads (e.g. 32 threads for massive directories)
 hcp copy "C:\Codebase" "D:\Backup" --threads 32
 
-# 4. Custom Direct I/O Chunk Buffer (e.g. 8 MB per thread)
+# 5. Custom Direct I/O Chunk Buffer (e.g. 8 MB per thread)
 hcp copy "D:\BigFile.vhdx" "E:\Dest" --buffer-size-mb 8
 ```
 

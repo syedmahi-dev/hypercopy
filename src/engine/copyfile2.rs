@@ -1,49 +1,16 @@
-use std::ffi::c_void;
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use windows_sys::Win32::Storage::FileSystem::{
-    CopyFile2, COPYFILE2_CALLBACK_CHUNK_FINISHED, COPYFILE2_EXTENDED_PARAMETERS,
-    COPYFILE2_MESSAGE, COPYFILE2_PROGRESS_CONTINUE,
-};
+use windows_sys::Win32::Foundation::GetLastError;
+use windows_sys::Win32::Storage::FileSystem::CopyFileExW;
 use crate::ui::ProgressStats;
 use crate::utils::path_to_wide;
 
 pub const COPY_FILE_NO_BUFFERING: u32 = 0x00001000;
-pub const COPY_FILE_ENABLE_LOCAL_STORAGE_OPTIMIZATION: u32 = 0x00008000;
 
 pub type HRESULT = i32;
 
-struct CopyProgressContext {
-    last_transferred: AtomicU64,
-    stats: *const ProgressStats,
-}
-
-unsafe extern "system" fn copyfile2_progress_routine(
-    p_message: *const COPYFILE2_MESSAGE,
-    pv_callback_context: *const c_void,
-) -> i32 {
-    if p_message.is_null() || pv_callback_context.is_null() {
-        return COPYFILE2_PROGRESS_CONTINUE;
-    }
-    unsafe {
-        let msg = &*p_message;
-        if msg.Type == COPYFILE2_CALLBACK_CHUNK_FINISHED {
-            let ctx = &*(pv_callback_context as *const CopyProgressContext);
-            let current_total = msg.Info.ChunkFinished.uliTotalBytesTransferred;
-            let prev = ctx.last_transferred.swap(current_total, Ordering::Relaxed);
-            let delta = current_total.saturating_sub(prev);
-            if delta > 0 {
-                (*ctx.stats).copied_bytes.fetch_add(delta, Ordering::Relaxed);
-            }
-        }
-    }
-    COPYFILE2_PROGRESS_CONTINUE
-}
-
-/// Execute high-speed copy using Windows CopyFile2 kernel offload API with local storage optimization.
-/// For files < 1MB: omits progress routine callback to eliminate kernel-to-user context switch overhead.
-/// For files >= 1MB: activates real-time chunk progress routine for smooth HUD feedback.
+/// Execute high-speed copy using Windows CopyFileExW kernel offload API with unbuffered bypass.
 pub fn copy_file2(
     src: &Path,
     dst: &Path,
@@ -64,51 +31,28 @@ pub fn copy_file2_wide(
     no_buffering: bool,
     stats: &Arc<ProgressStats>,
 ) -> Result<(), String> {
-    let mut copy_flags = COPY_FILE_ENABLE_LOCAL_STORAGE_OPTIMIZATION;
-    if no_buffering {
-        copy_flags |= COPY_FILE_NO_BUFFERING;
-    }
-
-    let is_small = file_size < 1024 * 1024;
-
-    let ctx = CopyProgressContext {
-        last_transferred: AtomicU64::new(0),
-        stats: Arc::as_ptr(stats),
-    };
-
-    let params = if is_small {
-        // Zero-callback fast path: no context switches or atomic swaps in kernel callback
-        COPYFILE2_EXTENDED_PARAMETERS {
-            dwSize: std::mem::size_of::<COPYFILE2_EXTENDED_PARAMETERS>() as u32,
-            dwCopyFlags: copy_flags,
-            pfCancel: std::ptr::null_mut(),
-            pProgressRoutine: None,
-            pvCallbackContext: std::ptr::null_mut(),
-        }
+    let copy_flags = if no_buffering {
+        COPY_FILE_NO_BUFFERING
     } else {
-        // Chunk tracking for large files
-        COPYFILE2_EXTENDED_PARAMETERS {
-            dwSize: std::mem::size_of::<COPYFILE2_EXTENDED_PARAMETERS>() as u32,
-            dwCopyFlags: copy_flags,
-            pfCancel: std::ptr::null_mut(),
-            pProgressRoutine: Some(copyfile2_progress_routine),
-            pvCallbackContext: &ctx as *const _ as *mut c_void,
-        }
+        0
     };
 
-    let hr: HRESULT = unsafe { CopyFile2(src_wide.as_ptr(), dst_wide.as_ptr(), &params) };
+    let ok = unsafe {
+        CopyFileExW(
+            src_wide.as_ptr(),
+            dst_wide.as_ptr(),
+            None,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            copy_flags,
+        )
+    };
 
-    if hr >= 0 {
-        if is_small {
-            stats.copied_bytes.fetch_add(file_size, Ordering::Relaxed);
-        } else {
-            let finished = ctx.last_transferred.load(Ordering::Relaxed);
-            if file_size > finished {
-                stats.copied_bytes.fetch_add(file_size - finished, Ordering::Relaxed);
-            }
-        }
+    if ok != 0 {
+        stats.copied_bytes.fetch_add(file_size, Ordering::Relaxed);
         Ok(())
     } else {
-        Err(format!("CopyFile2 failed with HRESULT 0x{:08X}", hr as u32))
+        let err = unsafe { GetLastError() };
+        Err(format!("CopyFileExW failed with error {}", err))
     }
 }

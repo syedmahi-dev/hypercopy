@@ -24,8 +24,8 @@ use verify::verify_files;
 #[command(
     name = "hcp",
     author = "HyperCopy Team",
-    version = "0.2.1",
-    about = "⚡ The world's fastest bare-metal hardware-saturating copy & paste CLI engine written in Rust",
+    version,
+    about = "The world's fastest bare-metal hardware-saturating copy & paste CLI engine written in Rust",
     long_about = "HyperCopy (hcp) extracts every last drop of performance from your hardware using:\n\
                   • ReFS / CoW Instant Zero-I/O Block Cloning (clones gigabytes in <1ms)\n\
                   • Unbuffered Bare-Metal Direct I/O (DMA) bypassing Windows Page Cache\n\
@@ -103,9 +103,13 @@ pub struct CopyArgs {
     #[arg(short, long)]
     pub threads: Option<usize>,
 
-    /// Engine strategy: auto, reflink, copyfile2, direct, buffered
+    /// Engine strategy: auto, parallel, reflink, copyfile2, direct, buffered
     #[arg(short, long, default_value = "auto")]
     pub engine: String,
+
+    /// Number of parallel streams per large file (segmented multi-part copy, default: 8)
+    #[arg(short = 's', long, alias = "parallel-streams")]
+    pub streams: Option<usize>,
 
     /// Buffer size in megabytes for streaming (default: 4 MB)
     #[arg(short = 'b', long = "buffer-size-mb", default_value = "4")]
@@ -133,9 +137,13 @@ pub struct PasteArgs {
     #[arg(short, long)]
     pub threads: Option<usize>,
 
-    /// Engine strategy: auto, reflink, copyfile2, direct, buffered
+    /// Engine strategy: auto, parallel, reflink, copyfile2, direct, buffered
     #[arg(short, long, default_value = "auto")]
     pub engine: String,
+
+    /// Number of parallel streams per large file (segmented multi-part copy, default: 8)
+    #[arg(short = 's', long, alias = "parallel-streams")]
+    pub streams: Option<usize>,
 
     /// Buffer size in megabytes (default: 4 MB)
     #[arg(short = 'b', long = "buffer-size-mb", default_value = "4")]
@@ -206,6 +214,7 @@ pub fn run() {
                 destination: dest,
                 threads: args.threads,
                 engine: args.engine,
+                streams: args.streams,
                 buffer_size_mb: args.buffer_size_mb,
                 verify: args.verify,
                 no_buffering: args.no_buffering,
@@ -254,6 +263,7 @@ pub fn run() {
                     destination: dest,
                     threads: None,
                     engine: "auto".to_string(),
+                    streams: None,
                     buffer_size_mb: 4,
                     verify: false,
                     no_buffering: false,
@@ -340,15 +350,72 @@ pub fn execute_copy(args: CopyArgs) {
         8 * 1024 * 1024u64
     };
 
+    let streams = args.streams.unwrap_or_else(|| (num_cpus::get() * 2).clamp(4, 16));
+
     let config = Arc::new(EngineConfig {
         strategy,
         buffer_size,
         no_buffering_threshold: no_buf_threshold,
         preallocate: true,
         preserve_attributes: true,
+        parallel_streams: streams,
     });
 
     let stats = ProgressStats::new();
+
+    // Ultra-Fast Path for single file copies: avoid spawning thread pool and directory scanner
+    if args.sources.len() == 1 && args.sources[0].is_file() {
+        let src = &args.sources[0];
+        let file_size = src.metadata().map(|m| m.len()).unwrap_or(0);
+        let dst = if args.destination.is_dir()
+            || args.destination.to_string_lossy().ends_with('/')
+            || args.destination.to_string_lossy().ends_with('\\')
+        {
+            args.destination.join(src.file_name().unwrap_or_default())
+        } else {
+            args.destination.clone()
+        };
+
+        if let Some(parent) = dst.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+
+        stats.total_files.store(1, Ordering::Relaxed);
+        stats.total_bytes.store(file_size, Ordering::Relaxed);
+
+        let reporter = ProgressReporter::start(Arc::clone(&stats), args.quiet);
+
+        let src_wide = utils::path_to_wide(src);
+        let dst_wide = utils::path_to_wide(&dst);
+
+        let res = copy_single_file_fast(
+            src,
+            &dst,
+            &src_wide,
+            &dst_wide,
+            file_size,
+            &config,
+            &stats,
+        );
+
+        if let Err(e) = res {
+            eprintln!("\n{} {:?} -> {:?}: {}", "Failed to copy".bold().red(), src, dst, e);
+        } else if args.verify {
+            match verify_files(src, &dst) {
+                Ok(true) => {}
+                Ok(false) => {
+                    eprintln!("\n{} Integrity verification mismatch on {:?}", "CRITICAL:".bold().red(), dst);
+                    stats.failed_files.fetch_add(1, Ordering::Relaxed);
+                }
+                Err(e) => {
+                    eprintln!("\n{} Verification failed on {:?}: {}", "Warning:".bold().yellow(), dst, e);
+                }
+            }
+        }
+
+        reporter.finish();
+        return;
+    }
 
     let t_start = std::time::Instant::now();
 

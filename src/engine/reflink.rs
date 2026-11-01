@@ -33,6 +33,17 @@ pub fn try_reflink_copy(src: &Path, dst: &Path, file_size: u64) -> Result<(), St
         return Err("Reflink disabled on current filesystem".to_string());
     }
 
+    // Reflink / Block Cloning is physically only possible on the exact same filesystem volume
+    let src_str = src.to_string_lossy();
+    let dst_str = dst.to_string_lossy();
+    if src_str.len() >= 2 && dst_str.len() >= 2 {
+        let src_drive = src_str.chars().next().unwrap_or('\0').to_ascii_uppercase();
+        let dst_drive = dst_str.chars().next().unwrap_or('\0').to_ascii_uppercase();
+        if src_drive.is_alphabetic() && dst_drive.is_alphabetic() && src_drive != dst_drive {
+            return Err("Cross-volume copy cannot use reflink".to_string());
+        }
+    }
+
     if file_size == 0 {
         // Empty file - just create it
         std::fs::File::create(dst).map_err(|e| e.to_string())?;

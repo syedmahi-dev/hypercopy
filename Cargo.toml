@@ -1,6 +1,6 @@
 [package]
 name = "hypercopy"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 authors = ["syedmahi-dev <mahi@local>"]
 description = "The world's fastest bare-metal hardware-saturating copy & paste CLI engine written in Rust"
