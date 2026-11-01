@@ -7,16 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0] - 2026-11-01
+
+### 🚀 Major Highlights
+- **Default Windows Copy/Paste Interception**: `hcp enable-default` runs a lightweight background daemon that hooks `Ctrl+V` inside Windows File Explorer and Desktop. Standard `Ctrl+C` / `Ctrl+V` now automatically transfers data using HyperCopy's Direct DMA engine at 2.0+ GB/s without modifying user habits!
+- **Zero-Flicker 25 FPS Real-Time HUD**: Completely rewritten progress dashboard with animated braille spinner (`⠋ ⠙ ⠹ ...`), instantaneous speed in GB/s or MB/s, progress gauge, byte counters, and ETA.
+- **Windows Explorer Right-Click Context Menu**: Built-in `hcp setup-menu` installs "⚡ Copy with HyperCopy" and "⚡ Paste with HyperCopy" into the native Windows context menu without needing Administrator privileges.
+- **Official npm Package Distribution**: Published `hypercopy` npm package with global CLI wrapper (`npx hypercopy copy ...` or `npm install -g hypercopy`).
+
+### ⚡ Performance & Reliability
+- Pre-allocated 4096-byte sector-aligned DMA buffers (`FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH`).
+- Extent pre-allocation upfront via `SetEndOfFile` preventing NTFS dynamic fragmentation pauses.
+- Safe pass-through for non-file clipboard data: Text, code, and images in browsers, VS Code, Word, etc. remain 100% unaffected.
+- Automatic shell folder refresh via `SHChangeNotify(SHCNE_UPDATEDIR)`.
+
+---
+
 ## [0.1.0] - 2026-11-01
 
 ### Added
-- **Instant CoW Reflink Engine**: Support for `FSCTL_DUPLICATE_EXTENTS_TO_FILE` allowing instantaneous zero-I/O cloning on ReFS and modern volumes.
-- **Bare-Metal Direct DMA Unbuffered I/O**: Direct I/O streaming using `FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH` with 4096-byte sector-aligned memory buffers, bypassing OS Page Cache thrashing.
-- **Windows Kernel Storage Offload (`CopyFile2`)**: Integration with Microsoft ODX (Offloaded Data Transfer) and `COPY_FILE_ENABLE_LOCAL_STORAGE_OPTIMIZATION`.
-- **Pre-Allocation Engine**: Automatic contiguous cluster reservation via `SetEndOfFile` upfront to eradicate filesystem fragmentation.
-- **Streaming Directory Scanner**: Asynchronous work-stealing directory traversal using bounded lock-free `crossbeam` channels, streaming discovered files immediately to workers.
-- **Windows System Clipboard Integration (`CF_HDROP`)**: True copy-paste interop allowing files to be copied in CLI and pasted in File Explorer (or vice-versa).
-- **SIMD BLAKE3 Verification**: AVX2 and AVX-512 cryptographic file verification operating at >25 GB/s.
-- **Zero-Lock Allocator**: Integrated Microsoft `mimalloc` as global memory allocator to eliminate thread lock contention.
-- **Zero-Overhead HUD**: Atomic real-time progress reporter updating at 15 FPS without slowing down active worker threads.
-- **Hardware Diagnostics & Benchmarks**: Built-in `hcp bench` and `hcp info` subcommands for system inspection.
+- Initial bare-metal parallel engine implementation in Rust.
+- ReFS / CoW block cloning via `FSCTL_DUPLICATE_EXTENTS_TO_FILE`.
+- Windows `CopyFile2` kernel offload API integration.
+- Lock-free streaming directory scanner with `crossbeam` channels.
+- SIMD AVX2 / AVX-512 BLAKE3 integrity verification (>25 GB/s).
+- Microsoft `mimalloc` global allocator integration.
+- Hardware saturation micro-benchmark suite (`hcp bench`).

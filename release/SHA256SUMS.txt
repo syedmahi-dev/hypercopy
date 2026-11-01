@@ -1,0 +1,2 @@
+5c62b9592958a4cfc1edff70efac3b1a9d4f52f646f0b19e272663a96d3c26c8  hypercopy-v0.2.0-windows-x86_64.zip
+ccbfddb2cca4183ff798ed82a5c2537d05e37a998cbbb9def671e7bceba6e0eb  hypercopy-0.2.0.tgz

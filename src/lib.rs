@@ -24,7 +24,7 @@ use verify::verify_files;
 #[command(
     name = "hcp",
     author = "HyperCopy Team",
-    version = "0.1.0",
+    version = "0.2.0",
     about = "⚡ The world's fastest bare-metal hardware-saturating copy & paste CLI engine written in Rust",
     long_about = "HyperCopy (hcp) extracts every last drop of performance from your hardware using:\n\
                   • ReFS / CoW Instant Zero-I/O Block Cloning (clones gigabytes in <1ms)\n\
