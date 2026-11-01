@@ -1,0 +1,43 @@
+{
+  "name": "hypercopy",
+  "version": "0.1.0",
+  "description": "⚡ The world's fastest bare-metal hardware-saturating copy & paste CLI engine written in Rust",
+  "main": "bin/index.js",
+  "bin": {
+    "hcp": "bin/index.js",
+    "hypercopy": "bin/index.js"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node bin/index.js --version"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/hypercopy.git"
+  },
+  "keywords": [
+    "copy",
+    "paste",
+    "fastcopy",
+    "cli",
+    "direct-io",
+    "nvme",
+    "performance",
+    "rust",
+    "robocopy",
+    "dma",
+    "hardware"
+  ],
+  "author": "HyperCopy Team",
+  "license": "MIT",
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ]
+}

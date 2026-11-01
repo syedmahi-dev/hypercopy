@@ -1,9 +1,12 @@
+use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use colored::*;
 use crate::utils::{format_bytes, format_duration, format_speed};
+
+const SPINNER_FRAMES: &[char] = &['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
 #[derive(Default)]
 pub struct ProgressStats {
@@ -47,13 +50,14 @@ impl ProgressReporter {
                 let mut last_time = Instant::now();
                 let mut last_bytes = 0u64;
                 let mut peak_speed = 0.0f64;
+                let mut frame_idx = 0usize;
 
                 while !stop_clone.load(Ordering::Relaxed) {
-                    thread::sleep(Duration::from_millis(100));
+                    thread::sleep(Duration::from_millis(40)); // 25 FPS buttery smooth updates
 
                     let now = Instant::now();
                     let elapsed = (now - last_time).as_secs_f64();
-                    if elapsed < 0.05 {
+                    if elapsed < 0.035 {
                         continue;
                     }
 
@@ -72,7 +76,7 @@ impl ProgressReporter {
                     last_time = now;
 
                     let percent = if total > 0 {
-                        (copied as f64 / total as f64) * 100.0
+                        ((copied as f64 / total as f64) * 100.0).clamp(0.0, 100.0)
                     } else {
                         0.0
                     };
@@ -97,17 +101,22 @@ impl ProgressReporter {
                     let filled = filled.min(width);
                     let bar: String = "━".repeat(filled) + &"─".repeat(width - filled);
 
+                    let spinner = SPINNER_FRAMES[frame_idx % SPINNER_FRAMES.len()];
+                    frame_idx = frame_idx.wrapping_add(1);
+
                     let status_extra = if !stats_clone.scan_finished.load(Ordering::Relaxed) {
-                        " (scanning...)".dimmed()
+                        " (discovering files...)".dimmed()
                     } else if copied >= total && total > 0 && completed < total_f {
-                        " (verifying BLAKE3...)".bright_magenta()
+                        " (verifying SIMD BLAKE3...)".bright_magenta()
                     } else {
                         "".normal()
                     };
 
+                    // Clean full-line erase followed by updated real-time telemetry
                     eprint!(
-                        "\r{} [{}] {:5.1}% | {} / {} | {} | ETA: {} | {}/{} files{}   ",
-                        "⚡ HYPERCOPY".bold().cyan(),
+                        "\x1b[2K\r{} {} [{}] {:5.1}% | {} / {} | {} | ETA: {} | {}/{} files{}   ",
+                        spinner.to_string().bold().bright_cyan(),
+                        "HYPERCOPY".bold().cyan(),
                         bar.bold().green(),
                         percent,
                         format_bytes(copied).bold().white(),
@@ -118,6 +127,7 @@ impl ProgressReporter {
                         total_f,
                         status_extra
                     );
+                    let _ = std::io::stderr().flush();
                 }
             }))
         };

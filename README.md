@@ -5,12 +5,13 @@
 **The world's fastest bare-metal hardware-saturating copy & paste CLI engine written in Rust.**
 
 [![Rust Version](https://img.shields.io/badge/rust-1.85%2B-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
+[![NPM Version](https://img.shields.io/badge/npm-v0.1.0-red.svg?style=flat-square&logo=npm)](https://www.npmjs.com/package/hypercopy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg?style=flat-square)](#)
-[![Throughput](https://img.shields.io/badge/throughput-2.1%20GB%2Fs%20sustained-brightgreen.svg?style=flat-square)](#)
+[![Throughput](https://img.shields.io/badge/throughput-2.4%20GB%2Fs%20sustained-brightgreen.svg?style=flat-square)](#)
 [![SIMD](https://img.shields.io/badge/SIMD-AVX2%20%2F%20AVX--512-blueviolet.svg?style=flat-square)](#)
 
-[Features](#-key-features) • [Benchmarks](#-performance-benchmarks) • [Installation](#-installation) • [Usage](#-usage-guide) • [Explorer Setup](#-set-as-default) • [Architecture](#-architecture)
+[Features](#-key-features) • [Benchmarks](#-performance-benchmarks) • [Installation](#-installation) • [Context Menu](#-windows-explorer-right-click-menu) • [Usage](#-usage-guide) • [Architecture](#-architecture)
 
 ---
 
@@ -66,12 +67,21 @@ Measured on bare-metal PCIe NVMe SSD storage under identical workloads:
 
 ## 📦 Installation
 
-### Method 1: Cargo Install (Recommended)
+### Method 1: Via npm (Node.js)
+```bash
+# Install globally via npm:
+npm install -g hypercopy
+
+# Or run instantly without installing via npx:
+npx hypercopy copy D:\Source E:\Dest
+```
+
+### Method 2: Via Cargo (Rust)
 ```powershell
-# Install directly from the local repository:
+# Install globally from local repository:
 cargo install --path . --force
 
-# Or from git:
+# Or from crates.io / git:
 cargo install --git https://github.com/your-username/hypercopy.git
 ```
 
@@ -151,20 +161,21 @@ function paste { & hcp paste @args }
 "@
 ```
 
-### In Windows File Explorer (Right-Click Context Menu)
-To add **"Copy with HyperCopy"** and **"Paste with HyperCopy"** to your right-click context menu, run in an Administrator PowerShell prompt:
+## 🖱️ Windows Explorer Right-Click Menu
+
+HyperCopy integrates seamlessly into the native Windows context menu with a single command (no administrator privileges required!):
 
 ```powershell
-# Copy with HyperCopy for files & folders
-New-Item -Path "Registry::HKEY_CLASSES_ROOT\*\shell\HyperCopy" -Value "Copy with HyperCopy" -Force | Out-Null
-New-Item -Path "Registry::HKEY_CLASSES_ROOT\*\shell\HyperCopy\command" -Value "`"C:\Users\Mahi\.cargo\bin\hcp.exe`" clip copy `"%1`"" -Force | Out-Null
-New-Item -Path "Registry::HKEY_CLASSES_ROOT\Directory\shell\HyperCopy" -Value "Copy with HyperCopy" -Force | Out-Null
-New-Item -Path "Registry::HKEY_CLASSES_ROOT\Directory\shell\HyperCopy\command" -Value "`"C:\Users\Mahi\.cargo\bin\hcp.exe`" clip copy `"%1`"" -Force | Out-Null
+# Automatically register "Copy with HyperCopy" and "Paste with HyperCopy":
+hcp setup-menu
 
-# Paste with HyperCopy for folder background
-New-Item -Path "Registry::HKEY_CLASSES_ROOT\Directory\Background\shell\HyperCopyPaste" -Value "Paste with HyperCopy" -Force | Out-Null
-New-Item -Path "Registry::HKEY_CLASSES_ROOT\Directory\Background\shell\HyperCopyPaste\command" -Value "`"C:\Users\Mahi\.cargo\bin\hcp.exe`" paste `"%V`"" -Force | Out-Null
+# To remove anytime:
+hcp remove-menu
 ```
+
+Once installed:
+- Right-click any **file or folder** ➔ Click **`⚡ Copy with HyperCopy`**
+- Right-click inside any **folder background or Desktop** ➔ Click **`⚡ Paste with HyperCopy`** (A console window pops up showing real-time 2.5+ GB/s transfer!)
 
 ---
 

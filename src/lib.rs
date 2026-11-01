@@ -1,6 +1,7 @@
 pub mod bench;
 pub mod clipboard;
 pub mod engine;
+pub mod menu;
 pub mod scanner;
 pub mod ui;
 pub mod utils;
@@ -30,6 +31,7 @@ use verify::verify_files;
                   • Windows CopyFile2 Hardware Offload (ODX) with local storage optimization\n\
                   • Multi-threaded work-stealing directory scanner with streaming copy pipeline\n\
                   • Seamless Windows Clipboard (CF_HDROP) integration (CLI <-> Explorer Ctrl+V)\n\
+                  • Windows Right-Click Context Menu integration for seamless Explorer copy/paste\n\
                   • AVX-512 / AVX2 SIMD BLAKE3 integrity verification (>25 GB/s)"
 )]
 pub struct Cli {
@@ -52,6 +54,14 @@ pub enum Commands {
         #[command(subcommand)]
         action: ClipAction,
     },
+
+    /// Install "Copy with HyperCopy" and "Paste with HyperCopy" into Windows File Explorer context menu
+    #[command(alias = "setup-menu")]
+    InstallMenu,
+
+    /// Remove HyperCopy from the Windows File Explorer context menu
+    #[command(alias = "remove-menu")]
+    UninstallMenu,
 
     /// Run the hardware saturation micro-benchmark to measure SSD & CPU line-rates
     Bench {
@@ -261,6 +271,18 @@ pub fn run() {
                 }
             },
         },
+        Commands::InstallMenu => {
+            if let Err(e) = menu::install_context_menu() {
+                eprintln!("{} {}", "Error:".bold().red(), e);
+                std::process::exit(1);
+            }
+        }
+        Commands::UninstallMenu => {
+            if let Err(e) = menu::remove_context_menu() {
+                eprintln!("{} {}", "Error:".bold().red(), e);
+                std::process::exit(1);
+            }
+        }
         Commands::Bench { target } => {
             bench::run_benchmark(target);
         }
@@ -276,7 +298,7 @@ pub fn execute_copy(args: CopyArgs) {
         std::process::exit(1);
     });
 
-    let threads = args.threads.unwrap_or_else(num_cpus::get);
+    let threads = args.threads.unwrap_or_else(|| (num_cpus::get() * 2).clamp(8, 32));
     let buffer_size = args.buffer_size_mb * 1024 * 1024;
     let no_buf_threshold = if args.no_buffering {
         0u64
