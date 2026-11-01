@@ -8,12 +8,28 @@ use std::path::Path;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use crate::ui::ProgressStats;
+use crate::utils::path_to_wide;
 pub use strategy::{CopyStrategy, EngineConfig};
 
 /// Execute optimized copy for a single file according to the selected engine strategy.
 pub fn copy_single_file(
     src: &Path,
     dst: &Path,
+    file_size: u64,
+    config: &EngineConfig,
+    stats: &Arc<ProgressStats>,
+) -> Result<(), String> {
+    let src_wide = path_to_wide(src);
+    let dst_wide = path_to_wide(dst);
+    copy_single_file_fast(src, dst, &src_wide, &dst_wide, file_size, config, stats)
+}
+
+/// Execute optimized copy with pre-computed wide paths, eliminating UTF-8/UTF-16 conversion overhead.
+pub fn copy_single_file_fast(
+    src: &Path,
+    dst: &Path,
+    src_wide: &[u16],
+    dst_wide: &[u16],
     file_size: u64,
     config: &EngineConfig,
     stats: &Arc<ProgressStats>,
@@ -42,7 +58,7 @@ pub fn copy_single_file(
         }
         CopyStrategy::CopyFile2 => {
             let no_buf = file_size >= config.no_buffering_threshold;
-            let res = copyfile2::copy_file2(src, dst, file_size, no_buf, stats);
+            let res = copyfile2::copy_file2_wide(src_wide, dst_wide, file_size, no_buf, stats);
             if res.is_ok() {
                 stats.copyfile2_files.fetch_add(1, Ordering::Relaxed);
                 stats.completed_files.fetch_add(1, Ordering::Relaxed);
@@ -62,17 +78,17 @@ pub fn copy_single_file(
             res
         }
         CopyStrategy::Auto => {
-            // Tier 1: Try Reflink (Instant zero-I/O block clone) only for files >= 1 MB
-            if file_size >= 1024 * 1024 && reflink::try_reflink_copy(src, dst, file_size).is_ok() {
+            // Tier 1: Try Reflink (Instant zero-I/O block clone) only for files >= 1 MB if supported by volume
+            if file_size >= 1024 * 1024 && reflink::is_reflink_supported() && reflink::try_reflink_copy(src, dst, file_size).is_ok() {
                 stats.reflink_files.fetch_add(1, Ordering::Relaxed);
                 stats.copied_bytes.fetch_add(file_size, Ordering::Relaxed);
                 stats.completed_files.fetch_add(1, Ordering::Relaxed);
                 return Ok(());
             }
 
-            // Tier 2: Kernel CopyFile2 with optional unbuffered bypass
+            // Tier 2: Kernel CopyFile2 with pre-computed wide paths & optional unbuffered bypass
             let no_buf = file_size >= config.no_buffering_threshold;
-            if copyfile2::copy_file2(src, dst, file_size, no_buf, stats).is_ok() {
+            if copyfile2::copy_file2_wide(src_wide, dst_wide, file_size, no_buf, stats).is_ok() {
                 stats.copyfile2_files.fetch_add(1, Ordering::Relaxed);
                 stats.completed_files.fetch_add(1, Ordering::Relaxed);
                 return Ok(());

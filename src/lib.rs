@@ -15,7 +15,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use engine::strategy::{CopyStrategy, EngineConfig};
-use engine::copy_single_file;
+use engine::copy_single_file_fast;
 use scanner::DirectoryScanner;
 use ui::{ProgressReporter, ProgressStats};
 use verify::verify_files;
@@ -24,7 +24,7 @@ use verify::verify_files;
 #[command(
     name = "hcp",
     author = "HyperCopy Team",
-    version = "0.2.0",
+    version = "0.2.1",
     about = "⚡ The world's fastest bare-metal hardware-saturating copy & paste CLI engine written in Rust",
     long_about = "HyperCopy (hcp) extracts every last drop of performance from your hardware using:\n\
                   • ReFS / CoW Instant Zero-I/O Block Cloning (clones gigabytes in <1ms)\n\
@@ -332,7 +332,7 @@ pub fn execute_copy(args: CopyArgs) {
         std::process::exit(1);
     });
 
-    let threads = args.threads.unwrap_or_else(|| (num_cpus::get() * 2).clamp(8, 32));
+    let threads = args.threads.unwrap_or_else(|| (num_cpus::get() * 4).clamp(16, 64));
     let buffer_size = args.buffer_size_mb * 1024 * 1024;
     let no_buf_threshold = if args.no_buffering {
         0u64
@@ -350,13 +350,17 @@ pub fn execute_copy(args: CopyArgs) {
 
     let stats = ProgressStats::new();
 
+    let t_start = std::time::Instant::now();
+
     // Start streaming directory scanner
     let task_rx = DirectoryScanner::scan_and_stream(
         args.sources.clone(),
         args.destination.clone(),
         Arc::clone(&stats),
-        10_000,
+        65_536,
     );
+
+    let t_scanner_started = std::time::Instant::now();
 
     // Launch progress reporting UI thread
     let reporter = ProgressReporter::start(Arc::clone(&stats), args.quiet);
@@ -366,6 +370,8 @@ pub fn execute_copy(args: CopyArgs) {
         .num_threads(threads)
         .build()
         .expect("Failed to build worker thread pool");
+
+    let t_pool_ready = std::time::Instant::now();
 
     let verify_enabled = args.verify;
 
@@ -377,9 +383,11 @@ pub fn execute_copy(args: CopyArgs) {
 
             s.spawn(move |_| {
                 while let Ok(task) = rx.recv() {
-                    let copy_res = copy_single_file(
+                    let copy_res = copy_single_file_fast(
                         &task.src,
                         &task.dst,
+                        &task.src_wide,
+                        &task.dst_wide,
                         task.size,
                         &cfg,
                         &st,
@@ -404,7 +412,17 @@ pub fn execute_copy(args: CopyArgs) {
         }
     });
 
+    let t_copy_done = std::time::Instant::now();
     reporter.finish();
+
+    if std::env::var("HYPERCOPY_PROFILE").is_ok() {
+        eprintln!(
+            "[PROFILE] Scanner launch: {:?}, Pool ready: {:?}, Copy loop: {:?}",
+            t_scanner_started - t_start,
+            t_pool_ready - t_scanner_started,
+            t_copy_done - t_pool_ready
+        );
+    }
 }
 
 pub fn print_hardware_info() {

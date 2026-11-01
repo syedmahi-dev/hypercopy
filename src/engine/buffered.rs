@@ -22,7 +22,7 @@ pub fn buffered_copy(
         let _ = writer.set_len(file_size);
     }
 
-    let buf_cap = buffer_size.max(64 * 1024);
+    let buf_cap = (file_size as usize).clamp(64 * 1024, buffer_size.max(64 * 1024));
     let mut buffer = vec![0u8; buf_cap];
 
     let mut total_read = 0u64;

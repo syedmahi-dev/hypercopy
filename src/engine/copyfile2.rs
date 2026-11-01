@@ -41,8 +41,9 @@ unsafe extern "system" fn copyfile2_progress_routine(
     COPYFILE2_PROGRESS_CONTINUE
 }
 
-/// Execute high-speed copy using Windows CopyFile2 kernel offload API.
-/// If `no_buffering` is true, OS file system cache is bypassed, eliminating memory churn.
+/// Execute high-speed copy using Windows CopyFile2 kernel offload API with local storage optimization.
+/// For files < 1MB: omits progress routine callback to eliminate kernel-to-user context switch overhead.
+/// For files >= 1MB: activates real-time chunk progress routine for smooth HUD feedback.
 pub fn copy_file2(
     src: &Path,
     dst: &Path,
@@ -52,34 +53,59 @@ pub fn copy_file2(
 ) -> Result<(), String> {
     let src_wide = path_to_wide(src);
     let dst_wide = path_to_wide(dst);
+    copy_file2_wide(&src_wide, &dst_wide, file_size, no_buffering, stats)
+}
 
+/// Copy using pre-computed wide UTF-16 paths, eliminating string encoding conversions.
+pub fn copy_file2_wide(
+    src_wide: &[u16],
+    dst_wide: &[u16],
+    file_size: u64,
+    no_buffering: bool,
+    stats: &Arc<ProgressStats>,
+) -> Result<(), String> {
     let mut copy_flags = COPY_FILE_ENABLE_LOCAL_STORAGE_OPTIMIZATION;
     if no_buffering {
         copy_flags |= COPY_FILE_NO_BUFFERING;
     }
+
+    let is_small = file_size < 1024 * 1024;
 
     let ctx = CopyProgressContext {
         last_transferred: AtomicU64::new(0),
         stats: Arc::as_ptr(stats),
     };
 
-    let params = COPYFILE2_EXTENDED_PARAMETERS {
-        dwSize: std::mem::size_of::<COPYFILE2_EXTENDED_PARAMETERS>() as u32,
-        dwCopyFlags: copy_flags,
-        pfCancel: std::ptr::null_mut(),
-        pProgressRoutine: Some(copyfile2_progress_routine),
-        pvCallbackContext: &ctx as *const _ as *mut c_void,
+    let params = if is_small {
+        // Zero-callback fast path: no context switches or atomic swaps in kernel callback
+        COPYFILE2_EXTENDED_PARAMETERS {
+            dwSize: std::mem::size_of::<COPYFILE2_EXTENDED_PARAMETERS>() as u32,
+            dwCopyFlags: copy_flags,
+            pfCancel: std::ptr::null_mut(),
+            pProgressRoutine: None,
+            pvCallbackContext: std::ptr::null_mut(),
+        }
+    } else {
+        // Chunk tracking for large files
+        COPYFILE2_EXTENDED_PARAMETERS {
+            dwSize: std::mem::size_of::<COPYFILE2_EXTENDED_PARAMETERS>() as u32,
+            dwCopyFlags: copy_flags,
+            pfCancel: std::ptr::null_mut(),
+            pProgressRoutine: Some(copyfile2_progress_routine),
+            pvCallbackContext: &ctx as *const _ as *mut c_void,
+        }
     };
 
     let hr: HRESULT = unsafe { CopyFile2(src_wide.as_ptr(), dst_wide.as_ptr(), &params) };
 
     if hr >= 0 {
-        // Ensure any remaining bytes are accounted for
-        let finished = ctx.last_transferred.load(Ordering::Relaxed);
-        if file_size > finished {
-            stats
-                .copied_bytes
-                .fetch_add(file_size - finished, Ordering::Relaxed);
+        if is_small {
+            stats.copied_bytes.fetch_add(file_size, Ordering::Relaxed);
+        } else {
+            let finished = ctx.last_transferred.load(Ordering::Relaxed);
+            if file_size > finished {
+                stats.copied_bytes.fetch_add(file_size - finished, Ordering::Relaxed);
+            }
         }
         Ok(())
     } else {

@@ -1,4 +1,6 @@
 /target
+/dist
+*.tgz
 **/*.rs.bk
 *.pdb
 .vscode/

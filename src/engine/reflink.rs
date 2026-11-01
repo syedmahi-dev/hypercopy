@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, HANDLE, INVALID_HANDLE_VALUE};
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, SetEndOfFile, SetFilePointerEx, CREATE_ALWAYS, FILE_BEGIN,
@@ -11,6 +12,12 @@ pub const FSCTL_DUPLICATE_EXTENTS_TO_FILE: u32 = 0x00098344;
 pub const GENERIC_READ: u32 = 0x80000000;
 pub const GENERIC_WRITE: u32 = 0x40000000;
 
+pub static REFLINK_SUPPORTED: AtomicBool = AtomicBool::new(true);
+
+pub fn is_reflink_supported() -> bool {
+    REFLINK_SUPPORTED.load(Ordering::Relaxed)
+}
+
 #[repr(C)]
 struct DuplicateExtentsData {
     file_handle: HANDLE,
@@ -22,6 +29,10 @@ struct DuplicateExtentsData {
 /// Attempt instantaneous Copy-On-Write (Reflink / Block Cloning) on ReFS / modern volumes.
 /// If supported and on the same volume, this clones files of any size in < 1 millisecond.
 pub fn try_reflink_copy(src: &Path, dst: &Path, file_size: u64) -> Result<(), String> {
+    if !is_reflink_supported() {
+        return Err("Reflink disabled on current filesystem".to_string());
+    }
+
     if file_size == 0 {
         // Empty file - just create it
         std::fs::File::create(dst).map_err(|e| e.to_string())?;
@@ -98,6 +109,12 @@ pub fn try_reflink_copy(src: &Path, dst: &Path, file_size: u64) -> Result<(), St
             Ok(())
         } else {
             let err = GetLastError();
+            // 1 = ERROR_INVALID_FUNCTION (NTFS doesn't support block cloning)
+            // 50 = ERROR_NOT_SUPPORTED
+            // 17 = ERROR_NOT_SAME_DEVICE
+            if err == 1 || err == 50 || err == 17 {
+                REFLINK_SUPPORTED.store(false, Ordering::Relaxed);
+            }
             Err(format!("FSCTL_DUPLICATE_EXTENTS_TO_FILE failed: error {}", err))
         }
     }
