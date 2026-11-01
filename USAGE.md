@@ -4,75 +4,54 @@ HyperCopy is an ultra-fast, hardware-saturating copy & paste tool written in Rus
 
 ---
 
-## 🚀 1. Installation
+## 🎯 1. Setting HyperCopy as Your System Default (Recommended)
 
-HyperCopy is already compiled and installed globally in your `~/.cargo/bin` directory.
+You don't need to learn new commands or open special menus. You can make HyperCopy your everyday default copy & paste handler across Windows:
 
-To reinstall or update at any time:
 ```powershell
-# From the project directory:
-cd C:\Users\Mahi\.gemini\antigravity\scratch\hypercopy
+hcp enable-default
+```
+
+### What this activates automatically:
+1. **Windows File Explorer & Desktop**: Intercepts standard `Ctrl+V` whenever files are on the clipboard, transferring them via Direct DMA at **2.0+ GB/s**!
+2. **Windows Startup**: Runs the lightweight background interceptor daemon (~4 MB RAM, 0% CPU) silently on boot.
+3. **PowerShell Profile**: Configures `cp` and `paste` aliases in `$PROFILE` so terminal commands run HyperCopy.
+4. **Context Menu**: Adds *"⚡ Copy with HyperCopy"* and *"⚡ Paste with HyperCopy"* to Windows File Explorer right-click menus without needing Administrator privileges.
+
+*To disable and restore Windows defaults at any time:*
+```powershell
+hcp disable-default
+```
+
+---
+
+## 🚀 2. Installation Options
+
+### Option A: Via npm
+```bash
+npm install -g hypercopy
+# Or run on demand without installing:
+npx hypercopy copy D:\Source E:\Dest
+```
+
+### Option B: Via Cargo (Rust)
+```powershell
 cargo install --path . --force
+# Or from GitHub:
+cargo install --git https://github.com/syedmahi-dev/hypercopy.git
 ```
 
 Verify the installation from any terminal:
 ```powershell
 hcp --version
-# Output: hcp 0.1.0
-```
-
----
-
-## ⚡ 2. Setting HyperCopy as Your Default Copy Tool
-
-### Option A: Make `cp` and `paste` Default in PowerShell
-
-Add these lines to your PowerShell profile so `cp` automatically uses `hcp`:
-
-Run in PowerShell:
-```powershell
-Add-Content $PROFILE @"
-
-# HyperCopy: Default Ultra-Fast Copy & Paste
-Remove-Item Alias:cp -ErrorAction SilentlyContinue
-function cp { & hcp copy @args }
-function paste { & hcp paste @args }
-"@
-```
-
-Now in any new terminal:
-- `cp "source" "destination"` automatically runs `hcp copy`!
-- `paste "destination"` automatically pastes from clipboard!
-
----
-
-### Option B: Add to Windows Explorer Right-Click Menu
-
-To right-click any file or folder in File Explorer and copy/paste with HyperCopy:
-
-Run this in an Administrator PowerShell prompt:
-```powershell
-# Add "Copy with HyperCopy" for files
-New-Item -Path "Registry::HKEY_CLASSES_ROOT\*\shell\HyperCopy" -Value "Copy with HyperCopy" -Force | Out-Null
-Set-ItemProperty -Path "Registry::HKEY_CLASSES_ROOT\*\shell\HyperCopy" -Name "Icon" -Value "shell32.dll,134"
-New-Item -Path "Registry::HKEY_CLASSES_ROOT\*\shell\HyperCopy\command" -Value "`"C:\Users\Mahi\.cargo\bin\hcp.exe`" clip copy `"%1`"" -Force | Out-Null
-
-# Add "Copy with HyperCopy" for directories
-New-Item -Path "Registry::HKEY_CLASSES_ROOT\Directory\shell\HyperCopy" -Value "Copy with HyperCopy" -Force | Out-Null
-Set-ItemProperty -Path "Registry::HKEY_CLASSES_ROOT\Directory\shell\HyperCopy" -Name "Icon" -Value "shell32.dll,134"
-New-Item -Path "Registry::HKEY_CLASSES_ROOT\Directory\shell\HyperCopy\command" -Value "`"C:\Users\Mahi\.cargo\bin\hcp.exe`" clip copy `"%1`"" -Force | Out-Null
-
-# Add "Paste with HyperCopy" for folder background
-New-Item -Path "Registry::HKEY_CLASSES_ROOT\Directory\Background\shell\HyperCopyPaste" -Value "Paste with HyperCopy" -Force | Out-Null
-Set-ItemProperty -Path "Registry::HKEY_CLASSES_ROOT\Directory\Background\shell\HyperCopyPaste" -Name "Icon" -Value "shell32.dll,260"
-New-Item -Path "Registry::HKEY_CLASSES_ROOT\Directory\Background\shell\HyperCopyPaste\command" -Value "`"C:\Users\Mahi\.cargo\bin\hcp.exe`" paste `"%V`"" -Force | Out-Null
+# Output: hcp 0.2.0
 ```
 
 ---
 
 ## 🛠️ 3. Command Reference & Usability
 
-### Command 1: `hcp copy` (or `hcp cp`)
+### Command: `hcp copy` (or `hcp cp`)
 Copies files or directories using the fastest hardware engine.
 
 ```powershell
@@ -99,7 +78,7 @@ hcp copy file1.zip file2.tar D:\Destination\
 
 ---
 
-### Command 2: `hcp paste` (or `hcp p`)
+### Command: `hcp paste` (or `hcp p`)
 Pastes files or folders currently stored in the Windows system clipboard (`CF_HDROP`).
 
 ```powershell
@@ -112,7 +91,7 @@ hcp paste
 
 ---
 
-### Command 3: `hcp clip`
+### Command: `hcp clip`
 Clipboard interoperability with Windows File Explorer and terminal text.
 
 ```powershell
@@ -132,8 +111,8 @@ hcp clip paste-text
 
 ---
 
-### Command 4: `hcp bench`
-Runs the live hardware saturation benchmark to test IOPS and throughput:
+### Command: `hcp bench`
+Runs the live hardware saturation benchmark to test IOPS and throughput on your machine:
 
 ```powershell
 hcp bench
@@ -141,7 +120,7 @@ hcp bench
 
 ---
 
-### Command 5: `hcp info`
+### Command: `hcp info`
 Displays detected hardware acceleration profile (CPU cores, SIMD instructions, allocator):
 
 ```powershell

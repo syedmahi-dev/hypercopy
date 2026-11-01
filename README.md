@@ -5,13 +5,13 @@
 **The world's fastest bare-metal hardware-saturating copy & paste CLI engine written in Rust.**
 
 [![Rust Version](https://img.shields.io/badge/rust-1.85%2B-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
-[![NPM Version](https://img.shields.io/badge/npm-v0.1.0-red.svg?style=flat-square&logo=npm)](https://www.npmjs.com/package/hypercopy)
+[![NPM Version](https://img.shields.io/badge/npm-v0.2.0-red.svg?style=flat-square&logo=npm)](https://www.npmjs.com/package/hypercopy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg?style=flat-square)](#)
 [![Throughput](https://img.shields.io/badge/throughput-2.4%20GB%2Fs%20sustained-brightgreen.svg?style=flat-square)](#)
 [![SIMD](https://img.shields.io/badge/SIMD-AVX2%20%2F%20AVX--512-blueviolet.svg?style=flat-square)](#)
 
-[Features](#-key-features) • [Benchmarks](#-performance-benchmarks) • [Installation](#-installation) • [Context Menu](#-windows-explorer-right-click-menu) • [Usage](#-usage-guide) • [Architecture](#-architecture)
+[Features](#-key-features) • [Benchmarks](#-performance-benchmarks) • [Default Setup](#-make-hypercopy-your-system-default) • [Installation](#-installation) • [Usage](#-usage-guide) • [Architecture](#-architecture)
 
 ---
 
@@ -27,6 +27,7 @@ Standard copy commands (`cp`, `xcopy`, PowerShell `Copy-Item`, and even Microsof
 - **Upfront Extent Pre-Allocation**: Reserves contiguous clusters to eliminate filesystem fragmentation.
 - **Streaming Work-Stealing Scanner**: Dispatches discovered files immediately via lock-free MPMC channels.
 - **Windows System Clipboard Integration**: Copies files directly to Windows `CF_HDROP` clipboard so you can press `Ctrl+V` in Windows Explorer, or paste in CLI via `hcp paste`.
+- **System-Wide Default Interceptor**: Intercepts standard `Ctrl+V` in Windows Explorer and Desktop so you don't even have to open a terminal!
 - **SIMD AVX-512 / AVX2 BLAKE3 Verification**: Cryptographic file validation at over **25 GB/s**.
 
 ---
@@ -53,13 +54,34 @@ Measured on bare-metal PCIe NVMe SSD storage under identical workloads:
 
 ---
 
+## 🎯 Make HyperCopy Your System Default
+
+You don't need to change your habits or remember special commands. You can make HyperCopy your everyday default copy & paste handler across Windows:
+
+```powershell
+hcp enable-default
+```
+
+**What this activates automatically:**
+- ⚡ **Hooks `Ctrl+V` in Windows File Explorer & Desktop**: When you copy files with `Ctrl+C` and paste with `Ctrl+V`, HyperCopy intercepts the paste and transfers the files at **2.0+ GB/s** via Direct DMA!
+- ⚡ **Auto-Starts on Windows Logon**: Adds a silent low-overhead daemon (~4MB RAM, 0% CPU) to your Windows user startup.
+- ⚡ **Aliases `cp` and `paste` in PowerShell**: Typing `cp` in PowerShell automatically uses HyperCopy.
+- ⚡ **Adds Explorer Right-Click Menu**: Adds *"⚡ Copy with HyperCopy"* and *"⚡ Paste with HyperCopy"* to right-click menus without needing Administrator rights!
+
+*To disable and restore Windows defaults anytime:*
+```powershell
+hcp disable-default
+```
+
+---
+
 ## ✨ Key Features
 
 - ⚡ **Direct DMA Streaming**: Bypasses Windows Page Cache using `FILE_FLAG_NO_BUFFERING` and aligned buffers.
 - ⚡ **Instant CoW Reflink**: Duplicates extents in <1ms without touching physical storage blocks on ReFS/Btrfs.
 - ⚡ **Zero-Lock Allocator**: Built with Microsoft `mimalloc` to eradicate multi-threaded heap contention.
 - ⚡ **Full Windows Explorer Interop**: `hcp clip copy <files>` puts files on your OS clipboard ready for `Ctrl+V`.
-- ⚡ **Real-Time Zero-Overhead HUD**: Atomic progress reporter tracks throughput (MB/s or GB/s), ETA, and completed files at 15 FPS without slowing down worker threads.
+- ⚡ **Real-Time 25 FPS HUD**: Atomic progress reporter tracks throughput (MB/s or GB/s), animated braille spinner, ETA, and completed files without slowing down worker threads.
 - ⚡ **Bit-for-Bit Verification**: SIMD BLAKE3 checksum hashing validates data integrity at memory bandwidth speed.
 - ⚡ **Built-in Micro-Benchmark**: Run `hcp bench` to measure your system's raw storage performance anytime.
 
@@ -81,17 +103,12 @@ npx hypercopy copy D:\Source E:\Dest
 # Install globally from local repository:
 cargo install --path . --force
 
-# Or from crates.io / git:
-cargo install --git https://github.com/your-username/hypercopy.git
+# Or from git:
+cargo install --git https://github.com/syedmahi-dev/hypercopy.git
 ```
 
-### Method 2: Build From Source
-```powershell
-git clone https://github.com/your-username/hypercopy.git
-cd hypercopy
-cargo build --release
-```
-The optimized binaries (`hcp.exe` and `hypercopy.exe`) will be generated in `target/release/`.
+### Method 3: Download Standalone Release Zip
+Download pre-built standalone binaries from the [Releases](https://github.com/syedmahi-dev/hypercopy/releases) page (`hypercopy-v0.2.0-windows-x86_64.zip`).
 
 ---
 
@@ -146,39 +163,6 @@ hcp bench
 
 ---
 
-## ⚙️ Set as Default
-
-### In PowerShell
-Make `cp` and `paste` use `HyperCopy` automatically by adding these lines to your `$PROFILE`:
-
-```powershell
-Add-Content $PROFILE @"
-
-# HyperCopy: Default Ultra-Fast Copy & Paste
-Remove-Item Alias:cp -ErrorAction SilentlyContinue
-function cp { & hcp copy @args }
-function paste { & hcp paste @args }
-"@
-```
-
-## 🖱️ Windows Explorer Right-Click Menu
-
-HyperCopy integrates seamlessly into the native Windows context menu with a single command (no administrator privileges required!):
-
-```powershell
-# Automatically register "Copy with HyperCopy" and "Paste with HyperCopy":
-hcp setup-menu
-
-# To remove anytime:
-hcp remove-menu
-```
-
-Once installed:
-- Right-click any **file or folder** ➔ Click **`⚡ Copy with HyperCopy`**
-- Right-click inside any **folder background or Desktop** ➔ Click **`⚡ Paste with HyperCopy`** (A console window pops up showing real-time 2.5+ GB/s transfer!)
-
----
-
 ## 🏗️ Architecture
 
 ```
@@ -195,10 +179,11 @@ Once installed:
      [Worker Pool] ◄────────────────────────────────────────┘
 (Rayon Stealing Threads)
             │
-            ├─► [Reflink Engine]   ──► FSCTL_DUPLICATE_EXTENTS_TO_FILE (CoW <1ms)
-            ├─► [CopyFile2 Engine] ──► Win32 Kernel Offload & Local Storage Optimization
-            ├─► [Direct I/O DMA]   ──► Sector-Aligned 4096-Byte Unbuffered DMA Stream
-            └─► [SIMD BLAKE3]      ──► AVX2/AVX-512 Zero-Copy Memory Hashing (>25 GB/s)
+            ├─► [Reflink Engine]     ──► FSCTL_DUPLICATE_EXTENTS_TO_FILE (CoW <1ms)
+            ├─► [CopyFile2 Engine]   ──► Win32 Kernel Offload & Local Storage Optimization
+            ├─► [Direct I/O DMA]     ──► Sector-Aligned 4096-Byte Unbuffered DMA Stream
+            ├─► [Ctrl+V Interceptor] ──► Low-Level Keyboard Hook (WH_KEYBOARD_LL)
+            └─► [SIMD BLAKE3]        ──► AVX2/AVX-512 Zero-Copy Memory Hashing (>25 GB/s)
 ```
 
 ---

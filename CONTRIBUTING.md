@@ -13,7 +13,7 @@ Thank you for your interest in making HyperCopy even faster! We welcome contribu
 ### Building the Project
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/hypercopy.git
+git clone https://github.com/syedmahi-dev/hypercopy.git
 cd hypercopy
 
 # Build in debug mode

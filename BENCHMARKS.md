@@ -135,7 +135,7 @@ To reproduce these exact numbers on your local machine:
 
 ```powershell
 # 1. Clone & compile release binary
-git clone https://github.com/your-username/hypercopy.git
+git clone https://github.com/syedmahi-dev/hypercopy.git
 cd hypercopy
 cargo build --release
 

@@ -17,7 +17,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/hypercopy.git"
+    "url": "https://github.com/syedmahi-dev/hypercopy.git"
   },
   "keywords": [
     "copy",
@@ -32,7 +32,7 @@
     "dma",
     "hardware"
   ],
-  "author": "HyperCopy Team",
+  "author": "syedmahi-dev",
   "license": "MIT",
   "os": [
     "win32"
