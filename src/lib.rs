@@ -1,5 +1,6 @@
 pub mod bench;
 pub mod clipboard;
+pub mod daemon;
 pub mod engine;
 pub mod menu;
 pub mod scanner;
@@ -53,6 +54,21 @@ pub enum Commands {
     Clip {
         #[command(subcommand)]
         action: ClipAction,
+    },
+
+    /// Enable HyperCopy as the system default copy & paste handler (replaces Ctrl+V in Explorer & cp in CLI)
+    #[command(alias = "enable-default")]
+    EnableDefault,
+
+    /// Disable HyperCopy as the default copy & paste handler
+    #[command(alias = "disable-default")]
+    DisableDefault,
+
+    /// Run the background interceptor daemon that hooks Explorer Ctrl+V
+    Daemon {
+        /// Run silently without console banner
+        #[arg(long)]
+        silent: bool,
     },
 
     /// Install "Copy with HyperCopy" and "Paste with HyperCopy" into Windows File Explorer context menu
@@ -271,6 +287,24 @@ pub fn run() {
                 }
             },
         },
+        Commands::EnableDefault => {
+            if let Err(e) = daemon::enable_default() {
+                eprintln!("{} {}", "Error:".bold().red(), e);
+                std::process::exit(1);
+            }
+        }
+        Commands::DisableDefault => {
+            if let Err(e) = daemon::disable_default() {
+                eprintln!("{} {}", "Error:".bold().red(), e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Daemon { silent } => {
+            if let Err(e) = daemon::run_daemon(silent) {
+                eprintln!("{} {}", "Error:".bold().red(), e);
+                std::process::exit(1);
+            }
+        }
         Commands::InstallMenu => {
             if let Err(e) = menu::install_context_menu() {
                 eprintln!("{} {}", "Error:".bold().red(), e);
